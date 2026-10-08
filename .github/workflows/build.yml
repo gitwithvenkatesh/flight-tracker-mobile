@@ -19,16 +19,21 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Prepare Web Directory & Install Dependencies
+      - name: Prepare Web Assets & Install Dependencies
         run: |
           mkdir -p www
-          if [ -f "index.html" ] && [ ! -f "www/index.html" ]; then
-            cp index.html www/
+          if [ -f "flight.html" ]; then
+            cp flight.html www/index.html
+          elif [ -f "index.html" ]; then
+            cp index.html www/index.html
           fi
           npm install
           npx cap add android || true
