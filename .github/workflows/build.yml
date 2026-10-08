@@ -17,30 +17,32 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+          java-version: '21'
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
 
-      - name: Prepare Web Assets & Install Dependencies
+      - name: Prepare Web Directory & Sync Capacitor
         run: |
           mkdir -p www
           if [ -f "flight.html" ]; then
             cp flight.html www/index.html
-          elif [ -f "index.html" ]; then
+          fi
+          if [ -f "index.html" ]; then
             cp index.html www/index.html
+          fi
+          if [ ! -f "www/index.html" ]; then
+            echo "<html><body><h1>Flight Tracker</h1></body></html>" > www/index.html
           fi
           npm install
           npx cap add android || true
           npx cap sync android
 
-      - name: Build Debug APK with Gradle
+      - name: Accept Android Licenses & Build APK
         run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
