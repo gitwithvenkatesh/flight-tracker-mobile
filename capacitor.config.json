@@ -1,0 +1,6 @@
+{
+  "appId": "com.tracker.flightalert",
+  "appName": "Flight Tracker",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
