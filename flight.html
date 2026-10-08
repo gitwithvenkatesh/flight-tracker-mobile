@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Airport Schedule Hub & Live Announcement System</title>
+    <!-- Live library bindings for spreadsheet processing and PDF text extraction -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --card-dark: #1e293b;
+            --accent-blue: #38bdf8;
+            --accent-neon: #10b981;
+            --accent-red: #ef4444;
+            --text-main: #f8fafc;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 { color: var(--accent-blue); margin-bottom: 0.5rem; }
+
+        .announcement-box {
+            background: linear-gradient(135deg, #1e3a8a, #0f172a);
+            border: 2px solid var(--accent-blue);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 15px -3px rgba(56, 189, 248, 0.2);
+            display: none;
+        }
+
+        .announcement-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--accent-blue);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        .announcement-pulse-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--accent-red);
+            border-radius: 50%;
+            animation: pulse-glow 1.5s infinite;
+        }
+
+        .upload-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 640px) {
+            .upload-grid { grid-template-columns: 1fr; }
+        }
+
+        .upload-section {
+            background-color: var(--card-dark);
+            border: 2px dashed #475569;
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+
+        .upload-section:hover {
+            border-color: var(--accent-blue);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload {
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            color: white;
+            padding: 0.65rem 1.25rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls {
+            margin: 1.5rem 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+            background-color: var(--card-dark);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        select, button {
+            background: #334155;
+            color: white;
+            border: 1px solid #475569;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        select:focus, button:focus {
+            outline: 2px solid var(--accent-blue);
+        }
+
+        .section-title {
+            font-size: 1.25rem;
+            color: #94a3b8;
+            margin: 1.5rem 0 0.75rem 0;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 0.5rem;
+        }
+
+        .schedule-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .flight-card {
+            background-color: var(--card-dark);
+            border-left: 5px solid var(--accent-blue);
+            border-radius: 8px;
+            padding: 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .flight-card.alert-warning {
+            border-left-color: #f59e0b;
+        }
+
+        .flight-card.alert-critical {
+            border-left-color: var(--accent-red);
+            background-color: #451a03;
+            animation: flash 1s infinite;
+        }
+
+        .flight-info h3 { margin: 0 0 0.25rem 0; font-size: 1.25rem; }
+        
+        .desc-box {
+            margin-top: 0.5rem; 
+            color: #cbd5e1; 
+            background: #273549; 
+            padding: 8px 12px; 
+            border-radius: 6px; 
+            font-size: 0.9rem;
+            line-height: 1.4;
+            max-width: 600px;
+            word-break: break-word;
+        }
+
+        .timer-zone {
+            text-align: right;
+            min-width: 140px;
+        }
+
+        .countdown {
+            font-size: 1.35rem;
+            font-weight: 700;
+            font-family: monospace;
+        }
+
+        .btn-dismiss {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            font-weight: bold;
+        }
+
+        @keyframes pulse-glow {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 10px var(--accent-red); }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
+        @keyframes flash {
+            0%, 100% { background-color: #451a03; }
+            50% { background-color: #7f1d1d; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Flight Tracker & Reminder System</h1>
+        <p>Upload your flight schedule and optional custom alarm ringtone.</p>
+    </header>
+
+    <!-- Top Announcement Box -->
+    <div class="announcement-box" id="announcementBox">
+        <div class="announcement-header">
+            <div class="announcement-pulse-dot"></div>
+            <span>Priority Live Announcement</span>
+        </div>
+        <div id="announcementContent"></div>
+    </div>
+
+    <!-- Upload Section -->
+    <div class="upload-grid">
+        <!-- Schedule File -->
+        <div class="upload-section">
+            <strong>1. Schedule File</strong>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin: 4px 0;">Accepts .xlsx, .xls, or .pdf</p>
+            <label class="custom-file-upload">
+                <input type="file" id="scheduleFile" accept=".xlsx, .xls, .pdf">
+                Choose Schedule File
+            </label>
+            <div id="file-name" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--accent-blue);">No schedule loaded</div>
+        </div>
+
+        <!-- Custom Ringtone -->
+        <div class="upload-section">
+            <strong>2. Alarm Ringtone</strong>
+            <p style="font-size: 0.85rem; color: #94a3b8; margin: 4px 0;">Upload MP3 / WAV audio</p>
+            <label class="custom-file-upload" style="background: linear-gradient(135deg, #059669, #047857);">
+                <input type="file" id="ringtoneFile" accept="audio/*">
+                Upload Custom Ringtone
+            </label>
+            <div id="audio-name" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--accent-neon);">Default beep sound active</div>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+        <label for="bufferTime">Trigger Alarm:</label>
+        <select id="bufferTime">
+            <option value="0">Exactly on time</option>
+            <option value="5">5 Minutes Before</option>
+            <option value="15" selected>15 Minutes Before</option>
+            <option value="30">30 Minutes Before</option>
+        </select>
+
+        <label style="margin-left: 10px;">
+            <input type="checkbox" id="showPastFlights" checked> Show Past Flights
+        </label>
+
+        <button id="testAudio">🔔 Test Alarm Sound</button>
+    </div>
+
+    <div class="section-title">All Tracked Timings & Descriptions</div>
+    <div class="schedule-grid" id="scheduleGrid">
+        <p style="text-align:center; color:#64748b;">No schedule loaded yet. Please select an Excel or PDF file.</p>
+    </div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+    let flightSchedules = [];
+    let dismissedAlarms = new Set();
+    let trackingTimer = null;
+    let customAudioElement = null;
+
+    // Web Audio synthesizer fallback
+    let audioCtx = null;
+    function getAudioContext() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+        return audioCtx;
+    }
+
+    function playAlarmSound() {
+        if (customAudioElement) {
+            customAudioElement.currentTime = 0;
+            customAudioElement.play().catch(e => console.log("Audio play error:", e));
+        } else {
+            const ctx = getAudioContext();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+        }
+    }
+
+    // Custom Ringtone Upload Listener
+    document.getElementById('ringtoneFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const url = URL.createObjectURL(file);
+        customAudioElement = new Audio(url);
+        document.getElementById('audio-name').innerText = `Active Ringtone: ${file.name}`;
+    });
+
+    // Test Audio Button
+    document.getElementById('testAudio').addEventListener('click', () => {
+        getAudioContext();
+        playAlarmSound();
+    });
+
+    // File Input Listener
+    document.getElementById('scheduleFile').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        document.getElementById('file-name').innerText = `Loaded: ${file.name}`;
+        
+        // Resume audio context on user interaction
+        getAudioContext();
+
+        const reader = new FileReader();
+        if (file.type === "application/pdf" || file.name.endsWith('.pdf')) {
+            reader.onload = function(e) {
+                processPDF(e.target.result);
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array', cellDates: true});
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const rawData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: ""});
+                parseExcelData(rawData);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    });
+
+    // Process PDF
+    async function processPDF(buffer) {
+        try {
+            const loadingTask = pdfjsLib.getDocument({data: buffer});
+            const pdf = await loadingTask.promise;
+            let completeTextLines = [];
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageLines = textContent.items.map(item => item.str);
+                completeTextLines = completeTextLines.concat(pageLines);
+            }
+            parsePDFText(completeTextLines);
+        } catch (err) {
+            console.error("PDF read error:", err);
+            alert("Error reading PDF file. Ensure it is a text-based PDF.");
+        }
+    }
+
+    function parsePDFText(lines) {
+        flightSchedules = [];
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            const timeMatch = line.match(/(\d{1,2}):(\d{2})(\s?(AM|PM))?/i);
+            
+            if (timeMatch) {
+                let targetTime = new Date();
+                let hours = parseInt(timeMatch[1], 10);
+                const minutes = parseInt(timeMatch[2], 10);
+                const ampm = timeMatch[3];
+
+                if (ampm) {
+                    if (ampm.toUpperCase().includes('PM') && hours < 12) hours += 12;
+                    if (ampm.toUpperCase().includes('AM') && hours === 12) hours = 0;
+                }
+                targetTime.setHours(hours, minutes, 0, 0);
+
+                let contextDetails = [];
+                for(let back = Math.max(0, i-2); back < i; back++) {
+                    if(lines[back].trim()) contextDetails.push(lines[back].trim());
+                }
+                for(let fwd = i; fwd <= Math.min(lines.length-1, i+3); fwd++) {
+                    if(lines[fwd].trim()) contextDetails.push(lines[fwd].trim());
+                }
+
+                flightSchedules.push({
+                    id: 'pdf_event_' + i,
+                    title: lines[i-1] && lines[i-1].trim() ? lines[i-1].trim() : `Flight Event (${timeMatch[0]})`,
+                    time: targetTime,
+                    info: contextDetails.join(" | ") || "No additional information provided."
+                });
+            }
+        }
+        startTrackingEngine();
+    }
+
+    // Process Excel Data
+    function parseExcelData(matrix) {
+        flightSchedules = [];
+        if (!matrix || matrix.length < 1) return;
+
+        for (let i = 0; i < matrix.length; i++) {
+            const row = matrix[i];
+            for (let j = 0; j < row.length; j++) {
+                let cellValue = row[j];
+                let targetTime = null;
+
+                if (cellValue instanceof Date) {
+                    targetTime = cellValue;
+                } else if (typeof cellValue === 'string' && cellValue.trim() !== "") {
+                    const matches = cellValue.match(/(\d{1,2}):(\d{2})(\s?(AM|PM))?/i);
+                    if (matches) {
+                        targetTime = new Date();
+                        let hours = parseInt(matches[1], 10);
+                        const mins = parseInt(matches[2], 10);
+                        const ampm = matches[3];
+                        if (ampm) {
+                            if (ampm.toUpperCase().includes('PM') && hours < 12) hours += 12;
+                            if (ampm.toUpperCase().includes('AM') && hours === 12) hours = 0;
+                        }
+                        targetTime.setHours(hours, mins, 0, 0);
+                    }
+                }
+
+                if (targetTime && !isNaN(targetTime.getTime())) {
+                    let title = "";
+                    let infoCollected = [];
+
+                    row.forEach((cell, idx) => {
+                        if (cell !== "" && idx !== j) {
+                            const val = String(cell).trim();
+                            infoCollected.push(val);
+                            if (!title && val.length > 2) title = val;
+                        }
+                    });
+
+                    if (i + 1 < matrix.length) {
+                        matrix[i+1].forEach(cell => {
+                            if (String(cell).trim() !== "") infoCollected.push(String(cell).trim());
+                        });
+                    }
+
+                    flightSchedules.push({
+                        id: 'excel_event_' + i + '_' + j,
+                        title: title || `Flight Entry (Row ${i+1})`,
+                        time: targetTime,
+                        info: infoCollected.join(" — ") || "No additional details found."
+                    });
+                }
+            }
+        }
+        startTrackingEngine();
+    }
+
+    function startTrackingEngine() {
+        if (trackingTimer) clearInterval(trackingTimer);
+        tick();
+        trackingTimer = setInterval(tick, 1000);
+    }
+
+    function tick() {
+        const grid = document.getElementById('scheduleGrid');
+        const announceBox = document.getElementById('announcementBox');
+        const announceContent = document.getElementById('announcementContent');
+        const bufferMinutes = parseInt(document.getElementById('bufferTime').value, 10);
+        const showPast = document.getElementById('showPastFlights').checked;
+        const now = new Date();
+
+        flightSchedules.sort((a, b) => a.time - b.time);
+
+        // Filter based on checkbox (either all or upcoming + recent past)
+        const activeSchedules = showPast 
+            ? flightSchedules 
+            : flightSchedules.filter(f => (f.time - now) > -15 * 60 * 1000);
+
+        grid.innerHTML = '';
+
+        if (activeSchedules.length === 0) {
+            announceBox.style.display = 'none';
+            grid.innerHTML = '<p style="text-align:center; color:#64748b;">No schedule items found. Please check your file formatting or enable "Show Past Flights".</p>';
+            return;
+        }
+
+        // Announcement card: next upcoming flight or the first in list
+        const topFlight = activeSchedules.find(f => (f.time - now) >= 0) || activeSchedules[0];
+        announceBox.style.display = 'block';
+
+        const topTimeDiff = topFlight.time - now;
+        let topCountdown = "DEPARTED / PASSED";
+        if (topTimeDiff > 0) {
+            const totalSecs = Math.floor(topTimeDiff / 1000);
+            const hrs = Math.floor(totalSecs / 3600);
+            const mins = Math.floor((totalSecs % 3600) / 60);
+            const secs = totalSecs % 60;
+            topCountdown = `T-${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        announceContent.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <h2 style="margin:0; color:#fff;">${topFlight.title}</h2>
+                    <p style="margin:5px 0 0 0; color:var(--accent-blue); font-weight:bold;">
+                        Scheduled Time: ${topFlight.time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </p>
+                </div>
+                <div style="font-size:1.6rem; font-weight:800; color:var(--accent-neon); font-family:monospace;">${topCountdown}</div>
+            </div>
+            <div style="margin-top:0.75rem; padding:8px; background:rgba(255,255,255,0.1); border-radius:6px; font-size:0.95rem;">
+                <strong>Announcement Details:</strong> ${topFlight.info}
+            </div>
+        `;
+
+        // Render Cards
+        activeSchedules.forEach(flight => {
+            const timeDiffMs = flight.time - now;
+            const bufferMs = bufferMinutes * 60 * 1000;
+            const effectiveDiffMs = timeDiffMs - bufferMs;
+
+            let statusClass = '';
+            let countdownText = '';
+            let shouldRing = false;
+
+            if (effectiveDiffMs <= 0 && timeDiffMs >= 0) {
+                statusClass = 'alert-critical';
+                countdownText = "ALARM RINGING";
+                shouldRing = true;
+            } else if (timeDiffMs < 0) {
+                countdownText = "PASSED";
+            } else {
+                const totalSecs = Math.floor(effectiveDiffMs / 1000);
+                const hrs = Math.floor(totalSecs / 3600);
+                const mins = Math.floor((totalSecs % 3600) / 60);
+                const secs = totalSecs % 60;
+                countdownText = `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                if (hrs === 0 && mins < 15) statusClass = 'alert-warning';
+            }
+
+            if (shouldRing && !dismissedAlarms.has(flight.id)) {
+                playAlarmSound();
+            }
+
+            const card = document.createElement('div');
+            card.className = `flight-card ${statusClass}`;
+            card.innerHTML = `
+                <div class="flight-info">
+                    <h3>${flight.title}</h3>
+                    <p style="color:var(--accent-blue); font-weight:bold; margin: 0.2rem 0;">Time: ${flight.time.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                    <div class="desc-box"><strong>Document Description:</strong><br>${flight.info}</div>
+                </div>
+                <div class="timer-zone">
+                    <div class="countdown">${countdownText}</div>
+                    ${shouldRing ? `<button class="btn-dismiss" onclick="dismissAlarm('${flight.id}')">Stop Alarm</button>` : ''}
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    // Bound to global window so the inline onclick handler always finds it
+    window.dismissAlarm = function(id) {
+        dismissedAlarms.add(id);
+        if (customAudioElement) {
+            customAudioElement.pause();
+            customAudioElement.currentTime = 0;
+        }
+        tick();
+    };
+
+    document.getElementById('bufferTime').addEventListener('change', tick);
+    document.getElementById('showPastFlights').addEventListener('change', tick);
+</script>
+</body>
+</html>
